@@ -1,0 +1,26 @@
+---
+# GCP Dynamic Inventory
+# Auto-discovers VMs tagged with "nginx" in the configured project/zone.
+#
+# Before using, update:
+#   - projects: Your GCP project ID
+#   - zones: Your target zone (must match terraform.tfvars)
+#   - compose.ansible_user: Your SSH username (must match terraform.tfvars)
+#   - compose.ansible_ssh_private_key_file: Path to your SSH private key
+
+plugin: google.cloud.gcp_compute
+projects:
+  - "your-gcp-project-id"
+zones:
+  - us-central1-c
+filters:
+  - "tags.items:nginx"
+auth_kind: application
+hostvar_expressions:
+  ansible_host: networkInterfaces[0].accessConfigs[0].natIP
+keyed_groups:
+  - key: tags['items'] | list
+    prefix: tag
+compose:
+  ansible_user: "your-username"
+  ansible_ssh_private_key_file: ~/.ssh/id_rsa

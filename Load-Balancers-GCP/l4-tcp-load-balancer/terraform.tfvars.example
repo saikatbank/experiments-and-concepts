@@ -1,0 +1,10 @@
+# ──────────────────────────────────────────────
+# Copy this file to terraform.tfvars and fill in your values
+#   cp terraform.tfvars.example terraform.tfvars
+# ──────────────────────────────────────────────
+
+project          = "your-gcp-project-id"
+region           = "us-central1"
+zone             = "us-central1-c"
+ssh_user         = "your-username"
+ssh_pub_key_path = "~/.ssh/id_rsa.pub"
