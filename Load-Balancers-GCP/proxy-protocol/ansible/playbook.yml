@@ -1,0 +1,68 @@
+---
+# Playbook: Configure NGINX with Proxy Protocol Support
+# Targets VMs discovered via GCP dynamic inventory with the "proxy-protocol" tag.
+#
+# This playbook:
+#   1. Installs NGINX
+#   2. Configures the listener with `proxy_protocol` directive
+#   3. Enables real client IP extraction via `real_ip_header proxy_protocol`
+#   4. Sets a custom index page showing hostname + client IP
+
+- name: Configure web servers with Proxy Protocol
+  hosts: tag_proxy_protocol
+  become: true
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+    
+    - name: Set custom index page
+      ansible.builtin.copy:
+        content: "Hello from {{ ansible_hostname }}"
+        dest: /var/www/html/index.html
+        owner: www-data
+        group: www-data
+        mode: "0644"
+
+    - name: Deploy NGINX config with Proxy Protocol support
+      ansible.builtin.copy:
+        content: |
+          server {
+              listen 80 proxy_protocol;
+
+              # Trust proxy protocol header from any source (LB IP)
+              set_real_ip_from 0.0.0.0/0;
+              real_ip_header proxy_protocol;
+
+              location / {
+                  default_type text/plain;
+                  return 200 "Hello from $hostname\nClient IP: $proxy_protocol_addr\n";
+              }
+
+              # Access log with real client IP
+              access_log /var/log/nginx/access.log;
+          }
+        dest: /etc/nginx/sites-available/default
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart nginx
+
+    - name: Ensure nginx is started and enabled
+      ansible.builtin.systemd:
+        name: nginx
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Restart nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: restarted

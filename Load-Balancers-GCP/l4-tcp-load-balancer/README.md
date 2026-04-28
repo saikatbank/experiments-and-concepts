@@ -55,7 +55,7 @@ ansible-galaxy collection install google.cloud
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start (One Command)
 
 ### Step 1 — Authenticate with GCP
 
@@ -64,62 +64,49 @@ gcloud auth application-default login
 gcloud config set project <your-project-id>
 ```
 
-### Step 2 — Configure Variables
+### Step 2 — Configure
 
 ```bash
 cd l4-tcp-load-balancer
-cp terraform.tfvars.example terraform.tfvars
+cp config.env.example config.env
 ```
 
-Edit `terraform.tfvars` with your values:
-
-```hcl
-project          = "your-gcp-project-id"
-region           = "us-central1"
-zone             = "us-central1-c"
-ssh_user         = "your-username"
-ssh_pub_key_path = "~/.ssh/id_rsa.pub"
-```
-
-### Step 3 — Provision Infrastructure
+Edit `config.env` with your values:
 
 ```bash
-terraform init
-terraform plan
-terraform apply
+GCP_PROJECT="your-gcp-project-id"
+GCP_REGION="us-central1"
+GCP_ZONE="us-central1-c"
+SSH_USER="your-username"
+SSH_PUB_KEY_PATH="~/.ssh/id_rsa.pub"
+SSH_PRIVATE_KEY_PATH="~/.ssh/id_rsa"
 ```
 
-Note the outputs — you'll need the **LB external IP** for testing:
+> **Note:** This is the **only file you need to edit**. The deploy script auto-generates `terraform.tfvars` and `ansible/inventory.gcp.yml` from this config.
+
+### Step 3 — Deploy Everything
 
 ```bash
-terraform output
+chmod +x deploy.sh destroy.sh
+./deploy.sh
 ```
 
-### Step 4 — Configure the Ansible Inventory
-
-Edit `ansible/inventory.gcp.yml` and update:
-- `projects` → your GCP project ID
-- `zones` → your target zone (must match `terraform.tfvars`)
-- `compose.ansible_user` → your SSH username
-- `compose.ansible_ssh_private_key_file` → path to your SSH private key
-
-Verify that Ansible can discover your VMs:
-
-```bash
-ansible-inventory -i ansible/inventory.gcp.yml --list
-```
-
-### Step 5 — Configure Servers with Ansible
-
-```bash
-ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansible/inventory.gcp.yml ansible/playbook.yml
-```
-
-> **Note:** `ANSIBLE_HOST_KEY_CHECKING=False` is needed to skip SSH host key verification on first connection. An `ansible.cfg` is included but may be ignored on Windows-mounted filesystems (WSL) due to world-writable directory permissions.
+This single command will:
+1. Generate `terraform.tfvars` and Ansible inventory from `config.env`
+2. Run `terraform apply` to provision all GCP resources
+3. Wait for VMs to boot
+4. Run `ansible-playbook` to install and configure NGINX
+5. Print the Load Balancer IP
 
 ---
 
 ## 🧪 Testing the Load Balancer
+
+Use the LB IP printed by `deploy.sh`, or get it with:
+
+```bash
+terraform output lb_external_ip
+```
 
 ### Basic Request
 
@@ -148,10 +135,10 @@ done
 
 ## 🧹 Cleanup
 
-Destroy all resources when done to avoid charges:
+Destroy all resources with one command:
 
 ```bash
-terraform destroy
+./destroy.sh
 ```
 
 ---
@@ -160,13 +147,17 @@ terraform destroy
 
 ```
 l4-tcp-load-balancer/
+├── config.env.example             # 👈 Single config — copy to config.env
+├── deploy.sh                      # One-command deploy (Terraform + Ansible)
+├── destroy.sh                     # One-command teardown
 ├── main.tf                        # All GCP resources (VMs, LB, firewall, etc.)
 ├── variables.tf                   # Input variable definitions
-├── terraform.tfvars.example       # Template — copy to terraform.tfvars
-├── .gitignore                     # Ignores .terraform/, *.tfstate, *.tfvars
+├── terraform.tfvars.example       # (Alternative) manual Terraform config
+├── .gitignore                     # Ignores generated files
 ├── ansible.cfg                    # Disables SSH host key checking
 ├── ansible/
-│   ├── inventory.gcp.yml          # GCP dynamic inventory (auto-discovers VMs)
 │   └── playbook.yml               # Installs & configures NGINX on VMs
 └── README.md
 ```
+
+> **Note:** `terraform.tfvars` and `ansible/inventory.gcp.yml` are **auto-generated** by `deploy.sh` — no need to create or edit them manually.
