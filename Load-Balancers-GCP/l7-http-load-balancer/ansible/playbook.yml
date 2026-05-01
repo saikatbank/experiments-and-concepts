@@ -1,14 +1,15 @@
 ---
-# Playbook: Configure NGINX with Path-Based Responses
-# Targets VMs discovered via GCP dynamic inventory with the "l7-http-lb" tag.
-#
-# This playbook:
-#   1. Installs NGINX
-#   2. Configures path-based responses (/api → JSON, /images → text, / → default)
-#   3. Each path returns hostname to verify L7 request-level distribution
+# Playbook: Configure NGINX on Web and DB servers
+# Uses GCP dynamic inventory to target VMs by tag:
+#   - tag_l7_web  → Web servers (VM-A, VM-B) with /api, /images, /
+#   - tag_l7_db   → DB server  (VM-C)        with /db
+
+# ──────────────────────────────────────────────
+# Play 1: Web Servers (VM-A, VM-B)
+# ──────────────────────────────────────────────
 
 - name: Configure web servers with path-based routing
-  hosts: tag_l7_http_lb
+  hosts: tag_l7_web
   become: true
 
   tasks:
@@ -45,6 +46,64 @@
               location / {
                   default_type text/plain;
                   return 200 "Hello from $hostname\nPath: $request_uri\nServed via L7 HTTP Load Balancer\n";
+              }
+
+              access_log /var/log/nginx/access.log;
+          }
+        dest: /etc/nginx/sites-available/default
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart nginx
+
+    - name: Ensure nginx is started and enabled
+      ansible.builtin.systemd:
+        name: nginx
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Restart nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: restarted
+
+# ──────────────────────────────────────────────
+# Play 2: DB Server (VM-C)
+# ──────────────────────────────────────────────
+
+- name: Configure DB server with database endpoint
+  hosts: tag_l7_db
+  become: true
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+
+    - name: Deploy NGINX config for DB backend
+      ansible.builtin.copy:
+        content: |
+          server {
+              listen 80;
+              server_name _;
+
+              # DB status endpoint — returns JSON
+              location /db {
+                  default_type application/json;
+                  return 200 '{"server": "$hostname", "path": "/db", "service": "database", "status": "healthy", "engine": "PostgreSQL 16"}\n';
+              }
+
+              # Health check endpoint for LB
+              location / {
+                  default_type text/plain;
+                  return 200 "DB Server: $hostname\nThis is the database backend.\n";
               }
 
               access_log /var/log/nginx/access.log;

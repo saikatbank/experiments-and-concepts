@@ -3,8 +3,10 @@
 # ║                                                              ║
 # ║  Architecture:                                               ║
 # ║  Client → Forwarding Rule → HTTP Proxy → URL Map            ║
-# ║           → Backend Service → Instance Group                 ║
-# ║           → VMs (NGINX with path-based routing via Ansible)  ║
+# ║           ├─ /api, /images, /* → Web Backend → Web Group     ║
+# ║           │                      (VM-A, VM-B)                ║
+# ║           └─ /db, /db/*       → DB Backend  → DB Group      ║
+# ║                                  (VM-C)                      ║
 # ╚══════════════════════════════════════════════════════════════╝
 
 # ──────────────────────────────────────────────
@@ -74,7 +76,7 @@ resource "google_compute_instance" "vm_a" {
   name         = "l7-vm-a"
   machine_type = "e2-micro"
   zone         = var.zone
-  tags         = ["l7-http-lb"]
+  tags         = ["l7-http-lb", "l7-web"]
 
   boot_disk {
     initialize_params {
@@ -96,7 +98,29 @@ resource "google_compute_instance" "vm_b" {
   name         = "l7-vm-b"
   machine_type = "e2-micro"
   zone         = var.zone
-  tags         = ["l7-http-lb"]
+  tags         = ["l7-http-lb", "l7-web"]
+
+  boot_disk {
+    initialize_params {
+      image = "ubuntu-os-cloud/ubuntu-2204-lts"
+    }
+  }
+
+  network_interface {
+    network = "default"
+    access_config {} # Ephemeral public IP
+  }
+
+  metadata = {
+    ssh-keys = "${var.ssh_user}:${file(var.ssh_pub_key_path)}"
+  }
+}
+
+resource "google_compute_instance" "vm_c" {
+  name         = "l7-vm-c"
+  machine_type = "e2-micro"
+  zone         = var.zone
+  tags         = ["l7-http-lb", "l7-db"]
 
   boot_disk {
     initialize_params {
@@ -115,7 +139,7 @@ resource "google_compute_instance" "vm_b" {
 }
 
 # ──────────────────────────────────────────────
-# Unmanaged Instance Group
+# Unmanaged Instance Groups
 # ──────────────────────────────────────────────
 
 resource "google_compute_instance_group" "web_group" {
@@ -124,6 +148,19 @@ resource "google_compute_instance_group" "web_group" {
   instances = [
     google_compute_instance.vm_a.self_link,
     google_compute_instance.vm_b.self_link,
+  ]
+
+  named_port {
+    name = "http"
+    port = 80
+  }
+}
+
+resource "google_compute_instance_group" "db_group" {
+  name      = "l7-db-group"
+  zone      = var.zone
+  instances = [
+    google_compute_instance.vm_c.self_link,
   ]
 
   named_port {
@@ -150,7 +187,7 @@ resource "google_compute_health_check" "http_health_check" {
 }
 
 # ──────────────────────────────────────────────
-# Backend Service (HTTP protocol for L7)
+# Backend Services (HTTP protocol for L7)
 # ──────────────────────────────────────────────
 
 resource "google_compute_backend_service" "web_backend_service" {
@@ -163,6 +200,21 @@ resource "google_compute_backend_service" "web_backend_service" {
 
   backend {
     group           = google_compute_instance_group.web_group.id
+    balancing_mode  = "UTILIZATION"
+    max_utilization = 0.8
+  }
+}
+
+resource "google_compute_backend_service" "db_backend_service" {
+  name                  = "l7-db-backend-service"
+  protocol              = "HTTP"
+  port_name             = "http"
+  load_balancing_scheme = "EXTERNAL"
+  health_checks         = [google_compute_health_check.http_health_check.id]
+  timeout_sec           = 30
+
+  backend {
+    group           = google_compute_instance_group.db_group.id
     balancing_mode  = "UTILIZATION"
     max_utilization = 0.8
   }
@@ -193,6 +245,11 @@ resource "google_compute_url_map" "url_map" {
     path_rule {
       paths   = ["/images", "/images/*"]
       service = google_compute_backend_service.web_backend_service.id
+    }
+
+    path_rule {
+      paths   = ["/db", "/db/*"]
+      service = google_compute_backend_service.db_backend_service.id
     }
   }
 }
@@ -238,6 +295,11 @@ output "vm_a_external_ip" {
 }
 
 output "vm_b_external_ip" {
-  description = "External IP of VM B"
+  description = "External IP of VM B (Web)"
   value       = google_compute_instance.vm_b.network_interface[0].access_config[0].nat_ip
+}
+
+output "vm_c_external_ip" {
+  description = "External IP of VM C (DB)"
+  value       = google_compute_instance.vm_c.network_interface[0].access_config[0].nat_ip
 }

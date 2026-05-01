@@ -88,7 +88,10 @@ echo "Test with:"
 echo "  curl http://$LB_IP/"
 echo "  curl http://$LB_IP/api"
 echo "  curl http://$LB_IP/images"
+echo "  curl http://$LB_IP/db"
 echo ""
 echo "Test request-level distribution:"
 echo '  for i in {1..20}; do echo "Request $i:"; curl -s http://'"$LB_IP"'/api; echo ""; done'
+echo '  for i in {1..20}; do echo "Request $i:"; curl -s http://'"$LB_IP"'/images; echo ""; done'
+echo '  for i in {1..20}; do echo "Request $i:"; curl -s http://'"$LB_IP"'/db; echo ""; done'
 echo "══════════════════════════════════════════"
