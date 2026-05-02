@@ -31,6 +31,7 @@ To explore an experiment:
 | Concept | Description |
 |---------|-------------|
 | [GCP Load Balancers](./Load-Balancers-GCP/) | Explorations of Google Cloud Load Balancing architectures (L4/L7, Proxy Protocol). |
+| [GCP Workload Identity](./Workload-Identity-GCP/) | Secure keyless authentication for GKE workloads using identity federation (KSA ↔ GSA). |
 
 ---
 *Feel free to contribute by adding new concepts or extending existing experiments following the standard structure.*
