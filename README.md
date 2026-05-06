@@ -31,6 +31,8 @@ To explore an experiment:
 | Concept | Description |
 |---------|-------------|
 | [GCP Load Balancers](./Load-Balancers-GCP/) | Explorations of Google Cloud Load Balancing architectures (L4/L7, Proxy Protocol). |
+| [GCP Workload Identity](./Workload-Identity-GCP/) | Secure keyless authentication for GKE workloads using identity federation (KSA ↔ GSA). |
+| [GCP IAM Role Binding](./IAM-Role-Binding-GCP/) | IAM core concept — assigning roles to principals on resources (WHO → WHAT → WHERE). |
 
 ---
 *Feel free to contribute by adding new concepts or extending existing experiments following the standard structure.*
